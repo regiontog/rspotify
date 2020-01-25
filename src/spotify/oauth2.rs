@@ -321,7 +321,6 @@ impl SpotifyOAuth {
             match serde_json::to_string(&token_info) {
                 Ok(token_info_string) => {
                     trace!("get_access_token->token_info[{:?}]", &token_info_string);
-                    self.save_token_info(&token_info_string);
                     return Some(token_info);
                 }
                 Err(why) => {
@@ -389,7 +388,6 @@ impl SpotifyOAuth {
         {
             match serde_json::to_string(&token_info) {
                 Ok(token_info_string) => {
-                    self.save_token_info(&token_info_string);
                     return Some(token_info);
                 }
                 Err(why) => {
@@ -403,9 +401,7 @@ impl SpotifyOAuth {
             None
         }
     }
-    fn save_token_info(&self, token_info: &str) {
-        save_token_info(token_info, self.cache_path.as_path())
-    }
+
     fn is_scope_subset(needle_scope: &mut str, haystack_scope: &mut str) -> bool {
         let needle_vec: Vec<&str> = needle_scope.split_whitespace().collect();
         let haystack_vec: Vec<&str> = haystack_scope.split_whitespace().collect();
@@ -414,6 +410,7 @@ impl SpotifyOAuth {
         // needle_set - haystack_set
         needle_set.is_subset(&haystack_set)
     }
+
     fn is_token_expired(&self, token_info: &TokenInfo) -> bool {
         is_token_expired(token_info)
     }
@@ -426,19 +423,6 @@ fn is_token_expired(token_info: &TokenInfo) -> bool {
         Some(expires_at) => now.timestamp() > expires_at - 10,
         None => true,
     }
-}
-fn save_token_info(token_info: &str, path: &Path) {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .expect(&format!("create file {:?} error", path.display()));
-    file.set_len(0).expect(&format!(
-        "clear original spoitfy-token-cache file [{:?}] failed",
-        path.display()
-    ));
-    file.write_all(token_info.as_bytes())
-        .expect("error when write file");
 }
 
 fn fetch_access_token(
@@ -503,42 +487,6 @@ mod tests {
             &mut broken_scope,
             &mut haystack_scope
         ));
-    }
-    #[test]
-    fn test_save_token_info() {
-        let spotify_oauth = SpotifyOAuth::default()
-            .state(&generate_random_string(16))
-            .scope("playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private streaming ugc-image-upload user-follow-modify user-follow-read user-library-read user-library-modify user-read-private user-read-birthdate user-read-email user-top-read user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played")
-            .cache_path(PathBuf::from(".spotify_token_cache.json"))
-            .build();
-        let token_info = TokenInfo::default()
-            .access_token("test-access_token")
-            .token_type("code")
-            .expires_in(3600)
-            .expires_at(1515841743)
-            .scope("playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private streaming ugc-image-upload user-follow-modify user-follow-read user-library-read user-library-modify user-read-private user-read-birthdate user-read-email user-top-read user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-recently-played")
-            .refresh_token("fghjklrftyhujkuiovbnm");
-        match serde_json::to_string(&token_info) {
-            Ok(token_info_string) => {
-                spotify_oauth.save_token_info(&token_info_string);
-                let display = spotify_oauth.cache_path.display();
-                let mut file = match File::open(&spotify_oauth.cache_path) {
-                    Err(why) => panic!("couldn't open {}: {}", display, why.to_string()),
-                    Ok(file) => file,
-                };
-                let mut token_info_string_from_file = String::new();
-                match file.read_to_string(&mut token_info_string_from_file) {
-                    Err(why) => panic!("couldn't read {}: {}", display, why.to_string()),
-                    Ok(_) => {
-                        assert_eq!(token_info_string, token_info_string_from_file);
-                    }
-                }
-            }
-            Err(why) => panic!(
-                "couldn't convert token_info to string: {} ",
-                why.to_string()
-            ),
-        }
     }
 
     #[test]
